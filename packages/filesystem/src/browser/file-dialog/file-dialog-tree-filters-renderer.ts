@@ -1,0 +1,89 @@
+/********************************************************************************
+ * Copyright (C) 2018 Red Hat, Inc. and others.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License v. 2.0 which is available at
+ * http://www.eclipse.org/legal/epl-2.0.
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License v. 2.0 are satisfied: GNU General Public License, version 2
+ * with the GNU Classpath Exception which is available at
+ * https://www.gnu.org/software/classpath/license.html.
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+ ********************************************************************************/
+
+import { h } from '@phosphor/virtualdom';
+import { VirtualRenderer } from '@theia/core/lib/browser';
+import { FileDialogTree } from './file-dialog-tree';
+
+export const FILE_TREE_FILTERS_LIST_CLASS = 'theia-FileTreeFiltersList';
+
+/**
+ * A set of file filters that are used by the dialog. Each entry is a human readable label,
+ * like "TypeScript", and an array of extensions, e.g.
+ * ```ts
+ * {
+ * 	'Images': ['png', 'jpg']
+ * 	'TypeScript': ['ts', 'tsx']
+ * }
+ * ```
+ */
+export class FileDialogTreeFilters {
+    [name: string]: string[];
+}
+
+export class FileDialogTreeFiltersRenderer extends VirtualRenderer {
+
+    constructor(
+        readonly filters: FileDialogTreeFilters,
+        readonly fileDialogTree: FileDialogTree
+    ) {
+        super();
+    }
+
+    protected doRender(): h.Child {
+        if (!this.filters) {
+            return null;
+        }
+
+        const fileTypes = ['All Files'];
+        Object.keys(this.filters).forEach(element => {
+            fileTypes.push(element);
+        });
+
+        const options = fileTypes.map(value => this.renderLocation(value));
+        return h.select({
+            className: FILE_TREE_FILTERS_LIST_CLASS,
+            onchange: e => this.onFilterChanged(e)
+        }, ...options);
+    }
+
+    protected renderLocation(value: string): h.Child {
+        return h.option({
+            value: value
+        }, value);
+    }
+
+    protected onFilterChanged(e: Event): void {
+        const locationList = this.locationList;
+        if (locationList) {
+            const value = locationList.value;
+            const filters = this.filters[value];
+            this.fileDialogTree.setFilter(filters);
+        }
+
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    get locationList(): HTMLSelectElement | undefined {
+        const locationList = this.host.getElementsByClassName(FILE_TREE_FILTERS_LIST_CLASS)[0];
+        if (locationList instanceof HTMLSelectElement) {
+            return locationList;
+        }
+        return undefined;
+    }
+
+}

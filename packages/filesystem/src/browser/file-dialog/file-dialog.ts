@@ -23,6 +23,7 @@ import { FileStatNode } from '../file-tree';
 import { LocationListRenderer } from '../location';
 import { FileDialogModel } from './file-dialog-model';
 import { FileDialogWidget } from './file-dialog-widget';
+import { FileDialogTreeFiltersRenderer, FileDialogTreeFilters } from './file-dialog-tree-filters-renderer';
 
 export const FileDialogFactory = Symbol('FileDialogFactory');
 export interface FileDialogFactory {
@@ -34,17 +35,49 @@ export const CONTROL_PANEL_CLASS = 'theia-ControlPanel';
 
 @injectable()
 export class FileDialogProps extends DialogProps {
+    /**
+     * A human-readable string for the open button.
+     */
+    openLabel?: string;
+
+    /**
+     * Allow to select files, defaults to `true`.
+     */
+    canSelectFiles?: boolean;
+
+    /**
+     * Allow to select folders, defaults to `false`.
+     */
+    canSelectFolders?: boolean;
+
+    /**
+     * Allow to select many files or folders.
+     */
+    canSelectMany?: boolean;
+
+    /**
+     * A set of file filters that are used by the dialog. Each entry is a human readable label,
+     * like "TypeScript", and an array of extensions, e.g.
+     * ```ts
+     * {
+     * 	'Images': ['png', 'jpg']
+     * 	'TypeScript': ['ts', 'tsx']
+     * }
+     * ```
+     */
+    filters?: FileDialogTreeFilters;
 }
 
 @injectable()
-export class FileDialog extends AbstractDialog<Readonly<FileStatNode> | undefined> {
+export class FileDialog extends AbstractDialog<Readonly<FileStatNode> | Readonly<FileStatNode>[] | undefined> {
 
     protected readonly back: HTMLSpanElement;
     protected readonly forward: HTMLSpanElement;
     protected readonly locationListRenderer: LocationListRenderer;
+    protected readonly treeFiltersRenderer: FileDialogTreeFiltersRenderer | undefined;
 
     constructor(
-        @inject(FileDialogProps) props: FileDialogProps,
+        @inject(FileDialogProps) readonly props: FileDialogProps,
         @inject(FileDialogWidget) readonly widget: FileDialogWidget
     ) {
         super(props);
@@ -61,6 +94,8 @@ export class FileDialog extends AbstractDialog<Readonly<FileStatNode> | undefine
 
         this.locationListRenderer = this.createLocationListRenderer();
         navigationPanel.appendChild(this.locationListRenderer.host);
+
+        this.treeFiltersRenderer = this.createFileTreeFiltersRenderer();
     }
 
     get model(): FileDialogModel {
@@ -71,12 +106,39 @@ export class FileDialog extends AbstractDialog<Readonly<FileStatNode> | undefine
         return new LocationListRenderer(this.model);
     }
 
+    protected createFileTreeFiltersRenderer(): FileDialogTreeFiltersRenderer | undefined {
+        if (this.props.filters) {
+            return new FileDialogTreeFiltersRenderer(this.props.filters, this.widget.model.tree);
+        }
+
+        return undefined;
+    }
+
     protected onUpdateRequest(msg: Message): void {
         super.onUpdateRequest(msg);
         setEnabled(this.back, this.model.canNavigateBackward());
         setEnabled(this.forward, this.model.canNavigateForward());
         this.locationListRenderer.render();
+
+        if (this.treeFiltersRenderer) {
+            this.treeFiltersRenderer.render();
+        }
+
         this.widget.update();
+    }
+
+    protected appendFiltersPanel(): void {
+        if (this.treeFiltersRenderer) {
+            const navigationPanel = document.createElement('div');
+            navigationPanel.classList.add(NAVIGATION_PANEL_CLASS);
+            this.contentNode.appendChild(navigationPanel);
+
+            const titlePanel = document.createElement('div');
+            titlePanel.innerHTML = "Format:";
+            navigationPanel.appendChild(titlePanel);
+
+            navigationPanel.appendChild(this.treeFiltersRenderer.host);
+        }
     }
 
     protected onAfterAttach(msg: Message): void {
@@ -86,8 +148,10 @@ export class FileDialog extends AbstractDialog<Readonly<FileStatNode> | undefine
             this.locationListRenderer.dispose();
         }));
 
+        this.appendFiltersPanel();
+
         this.appendCloseButton('Cancel');
-        this.appendAcceptButton('Open');
+        this.appendAcceptButton(this.props.openLabel ? this.props.openLabel : 'Open');
 
         this.addKeyListener(this.back, Key.ENTER, () => this.model.navigateBackward(), 'click');
         this.addKeyListener(this.forward, Key.ENTER, () => this.model.navigateForward(), 'click');
@@ -98,8 +162,55 @@ export class FileDialog extends AbstractDialog<Readonly<FileStatNode> | undefine
         this.widget.activate();
     }
 
-    get value(): Readonly<FileStatNode> | undefined {
-        return this.widget.model.selectedFileStatNodes[0];
+    isValid(value: Readonly<FileStatNode> | Readonly<FileStatNode>[] | undefined): string {
+        if (value) {
+            if (this.props.canSelectMany) {
+                if (value instanceof Array) {
+                    const results: Readonly<FileStatNode>[] = value;
+                    for (let i = 0; i < results.length; i++) {
+                        const error = this.validateNode(results[i]);
+                        if (error) {
+                            return error;
+                        }
+                    }
+                } else {
+                    const error = this.validateNode(value);
+                    if (error) {
+                        return error;
+                    }
+                }
+            } else {
+                if (value instanceof Array) {
+                    return 'You can select only one item';
+                }
+
+                return this.validateNode(value);
+            }
+        }
+
+        return '';
+    }
+
+    protected validateNode(node: Readonly<FileStatNode>): string {
+        if (typeof this.props.canSelectFiles === 'boolean'
+            && !this.props.canSelectFiles && !node.fileStat.isDirectory) {
+            return 'Files cannot be selected';
+        }
+
+        if (typeof this.props.canSelectFolders === 'boolean'
+            && !this.props.canSelectFolders && node.fileStat.isDirectory) {
+            return 'Folders cannot be selected';
+        }
+
+        return '';
+    }
+
+    get value(): Readonly<FileStatNode> | Readonly<FileStatNode>[] | undefined {
+        if (this.widget.model.selectedFileStatNodes.length === 1) {
+            return this.widget.model.selectedFileStatNodes[0];
+        } else {
+            return this.widget.model.selectedFileStatNodes;
+        }
     }
 
 }

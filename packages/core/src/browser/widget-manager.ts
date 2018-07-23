@@ -126,8 +126,8 @@ export class WidgetManager {
             throw Error("No widget factory '" + factoryId + "' has been registered.");
         }
         const widgetPromise = factory.createWidget(options);
-        this.widgetPromises.set(key, widgetPromise);
         const widget = await widgetPromise;
+        this.widgetPromises.set(key, widgetPromise);
         this.widgets.set(key, widget);
         widget.disposed.connect(() => {
             this.widgets.delete(key);

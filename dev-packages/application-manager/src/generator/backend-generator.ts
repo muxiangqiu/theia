@@ -35,6 +35,13 @@ const { BackendApplication, CliManager } = require('@theia/core/lib/node');
 const { backendApplicationModule } = require('@theia/core/lib/node/backend-application-module');
 const { messagingBackendModule } = require('@theia/core/lib/node/messaging/messaging-backend-module');
 const { loggerBackendModule } = require('@theia/core/lib/node/logger-backend-module');
+const { BackendApplicationConfigProvider } = require('@theia/core/lib/node/backend-application-config-provider');
+
+const applicationConfigProvider = BackendApplicationConfigProvider.get();
+const config = JSON.parse(\`
+${this.prettyStringify(this.pck.props.backend.config)}
+\`);
+applicationConfigProvider.initialize(config);
 
 const container = new Container();
 container.load(backendApplicationModule);

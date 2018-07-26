@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (C) 2017 TypeFox and others.
+ * Copyright (C) 2018 TypeFox and others.
  *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v. 2.0 which is available at
@@ -14,7 +14,19 @@
  * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
  ********************************************************************************/
 
-export * from './npm-registry';
-export * from './extension-package';
-export * from './application-package';
-export * from './application-props';
+import { FrontendApplicationConfig, ApplicationConfigProvider } from '@theia/application-package/lib/application-props';
+
+export class FrontendApplicationConfigProvider extends ApplicationConfigProvider<FrontendApplicationConfig> {
+
+    static get(): FrontendApplicationConfigProvider {
+        // tslint:disable-next-line:no-any
+        const globalObject = window as any;
+        const key = FrontendApplicationConfigProvider.SYMBOL;
+        return globalObject[key] || new FrontendApplicationConfigProvider(globalObject, key);
+    }
+
+}
+
+export namespace FrontendApplicationConfigProvider {
+    export const SYMBOL = Symbol('FrontendApplicationConfigProvider');
+}

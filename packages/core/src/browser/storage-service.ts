@@ -16,6 +16,7 @@
 
 import { inject, injectable } from 'inversify';
 import { ILogger } from '../common/logger';
+import { MessageService } from '../common/message-service';
 
 export const StorageService = Symbol('IStorageService');
 /**
@@ -45,10 +46,13 @@ export class LocalStorageService implements StorageService {
     private storage: LocalStorage;
 
     constructor(
-        @inject(ILogger) protected logger: ILogger
+        @inject(ILogger) protected logger: ILogger,
+        @inject(MessageService) protected readonly messageService: MessageService,
+
     ) {
         if (typeof window !== 'undefined' && window.localStorage) {
             this.storage = window.localStorage;
+            this.testLocalStorage();
         } else {
             logger.warn(log => log("The browser doesn't support localStorage. state will not be persisted across sessions."));
             this.storage = {};
@@ -57,7 +61,11 @@ export class LocalStorageService implements StorageService {
 
     setData<T>(key: string, data?: T): Promise<void> {
         if (data !== undefined) {
-            this.storage[this.prefix(key)] = JSON.stringify(data);
+            try {
+                this.storage[this.prefix(key)] = JSON.stringify(data);
+            } catch (e) {
+                this.ShowMessageNotification();
+            }
         } else {
             delete this.storage[this.prefix(key)];
         }
@@ -76,4 +84,31 @@ export class LocalStorageService implements StorageService {
         const pathname = typeof window === 'undefined' ? '' : window.location.pathname;
         return `theia:${pathname}:${key}`;
     }
+
+    private ShowMessageNotification() {
+        const READ_INSTRUCTIONS_ACTION = "Read Instructions";
+        const ERROR_MESSAGE = `Your prefered browser local storage is almost full.
+            To be able to save your current workspace layout or data, you may need to free some space.
+            You can refer to Theia page for instructions.
+            on how to manually clean your browser local storage.`;
+        this.messageService.warn(ERROR_MESSAGE, READ_INSTRUCTIONS_ACTION).then(selected => {
+            if (READ_INSTRUCTIONS_ACTION === selected) {
+                window.open("https://github.com/theia-ide/theia/wiki/Cleaning-Local-Storage");
+            }
+        });
+    }
+
+    private testLocalStorage(): void {
+        const array = new Array(60000); // size: <array size> * 5 =  ~ 300K
+        const keyTest = this.prefix(`Test`);
+
+        try {
+            this.storage[keyTest] = JSON.stringify(array);
+        } catch (error) {
+            this.ShowMessageNotification();
+        } finally {
+            this.storage.removeItem(keyTest);
+        }
+    }
+
 }
